@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e
+
+user_name=zoom
+user_uid=$(id -u)
+user_gid=$(id -g)
+
+if ! id -Gn | grep -wq docker; then
+	sudo='sudo'
+fi
+
+add_user_opts() {
+	docker_opts+=(--env="USER_NAME=${user_name}")
+	docker_opts+=(--env="USER_UID=${user_uid}")
+	docker_opts+=(--env="USER_GID=${user_gid}")
+
+	mkdir -p "${HOME}/.config" && touch "${HOME}/.config/zoomus.conf"
+	docker_opts+=(--volume="${HOME}/.config/zoomus.conf:/home/${user_name}/.config/zoomus.conf")
+
+	mkdir -p "${HOME}/.zoom"
+	docker_opts+=(--volume="${HOME}/.zoom:/home/${user_name}/.zoom")
+}
+
+add_x11_opts() {
+	# Make a X authentication file with proper permissions and mount this to a volume for the container to use
+	# http://wiki.ros.org/docker/Tutorials/GUI
+	xauth=/tmp/.docker.xauth
+	touch "${xauth}"
+	xauth nlist :0 | sed -e 's/^..../ffff/' | xauth -f "${xauth}" nmerge -
+
+	docker_opts+=(--device=/dev/dri)
+
+	xsock=/tmp/.X11-unix
+	docker_opts+=(--volume="${xsock}:${xsock}")
+	docker_opts+=(--volume="${xauth}:${xauth}")
+	docker_opts+=(--env="XAUTHORITY=${xauth}")
+	docker_opts+=(--env="DISPLAY=unix${DISPLAY}")
+}
+
+add_pulse_opts() {
+	docker_opts+=(--volume="/run/user/${user_uid}/pulse:/run/pulse")
+}
+
+add_video_opts() {
+	for device in /dev/video*
+	do
+		if [ -c "${device}" ]; then
+			docker_opts+=(--device="${device}:${device}")
+		fi
+	done
+}
+
+add_user_opts
+add_x11_opts
+add_pulse_opts
+add_video_opts
+
+echo "Starting Zoom with options:"
+printf "%s\n" "${docker_opts[@]}"
+
+# shellcheck disable=SC2046
+${sudo} docker run -d --rm $(printf "%s " "${docker_opts[@]}") \
+	jakubstefanski/zoom:latest zoom "$@"
