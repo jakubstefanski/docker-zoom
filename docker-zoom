@@ -2,24 +2,23 @@
 
 set -e
 
-user_name=zoom
-user_uid=$(id -u)
-user_gid=$(id -g)
+host_name=${HOST_NAME:-$(basename "$0")}
+user_name=${USER_NAME:-$(whoami)}
+user_uid=${USER_UID:-$(id -u)}
+user_gid=${USER_GID:-$(id -g)}
 
 if ! id -Gn | grep -wq docker; then
 	sudo='sudo'
 fi
 
 add_user_opts() {
+	docker_opts+=(--hostname="${host_name}")
 	docker_opts+=(--env="USER_NAME=${user_name}")
 	docker_opts+=(--env="USER_UID=${user_uid}")
 	docker_opts+=(--env="USER_GID=${user_gid}")
 
-	mkdir -p "${HOME}/.config" && touch "${HOME}/.config/zoomus.conf"
-	docker_opts+=(--volume="${HOME}/.config/zoomus.conf:/home/${user_name}/.config/zoomus.conf")
-
-	mkdir -p "${HOME}/.zoom"
-	docker_opts+=(--volume="${HOME}/.zoom:/home/${user_name}/.zoom")
+	mkdir -p "${HOME}"
+	docker_opts+=(--volume="${HOME}:/home/${user_name}")
 }
 
 add_x11_opts() {
