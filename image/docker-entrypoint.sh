@@ -29,7 +29,7 @@ grant_video_devices() {
 		if [[ -c $device ]]; then
 			video_gid=$(stat -c %g "$device")
 			video_group=$(stat -c %G "$device")
-			if [[ ${video_group} == "UNKNOWN" ]]; then
+			if [[ ${video_group} =~ ^UNKNOWN.* ]]; then
 				video_group=custom_video
 				groupadd -g "${video_gid}" "${video_group}"
 			fi
