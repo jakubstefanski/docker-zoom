@@ -2,50 +2,56 @@
 
 set -e
 
-host_name=${HOST_NAME:-$(basename "$0")}
-user_name=${USER_NAME:-$(whoami)}
-user_uid=${USER_UID:-$(id -u)}
-user_gid=${USER_GID:-$(id -g)}
+verbose=${DZOOM_VERBOSE:-'false'}
+image=${DZOOM_IMAGE:-'jakubstefanski/zoom:latest'}
+opts=${DZOOM_OPTS:-'--detach --rm'}
+cmd=${DZOOM_CMD:-'zoom'}
+
+hostname=${DZOOM_HOSTNAME:-$(basename "$0")}
+username=${DZOOM_USERNAME:-$(whoami)}
+uid=${DZOOM_UID:-$(id -u)}
+gid=${DZOOM_GID:-$(id -g)}
 
 if ! id -Gn | grep -wq docker; then
 	sudo='sudo'
 fi
 
 add_user_opts() {
-	docker_opts+=(--hostname="${host_name}")
-	docker_opts+=(--env="USER_NAME=${user_name}")
-	docker_opts+=(--env="USER_UID=${user_uid}")
-	docker_opts+=(--env="USER_GID=${user_gid}")
+	base_opts+=(--hostname="${hostname}")
+	base_opts+=(--env="USERNAME=${username}")
+	base_opts+=(--env="UID=${uid}")
+	base_opts+=(--env="GID=${gid}")
 
 	mkdir -p "${HOME}"
-	docker_opts+=(--volume="${HOME}:/home/${user_name}")
+	base_opts+=(--volume="${HOME}:/home/${username}")
 }
 
 add_x11_opts() {
-	# Make a X authentication file with proper permissions and mount this to a volume for the container to use
+	# Make a X authentication file with proper permissions and
+	# mount this to a volume for the container to use
 	# http://wiki.ros.org/docker/Tutorials/GUI
 	xauth=/tmp/.docker.xauth
 	touch "${xauth}"
 	xauth nlist :0 | sed -e 's/^..../ffff/' | xauth -f "${xauth}" nmerge -
 
-	docker_opts+=(--device=/dev/dri)
+	base_opts+=(--device=/dev/dri)
 
 	xsock=/tmp/.X11-unix
-	docker_opts+=(--volume="${xsock}:${xsock}")
-	docker_opts+=(--volume="${xauth}:${xauth}")
-	docker_opts+=(--env="XAUTHORITY=${xauth}")
-	docker_opts+=(--env="DISPLAY=unix${DISPLAY}")
+	base_opts+=(--volume="${xsock}:${xsock}")
+	base_opts+=(--volume="${xauth}:${xauth}")
+	base_opts+=(--env="XAUTHORITY=${xauth}")
+	base_opts+=(--env="DISPLAY=unix${DISPLAY}")
 }
 
 add_pulse_opts() {
-	docker_opts+=(--volume="/run/user/${user_uid}/pulse:/run/pulse")
+	base_opts+=(--volume="/run/user/${user_uid}/pulse:/run/pulse")
 }
 
 add_video_opts() {
 	for device in /dev/video*
 	do
 		if [ -c "${device}" ]; then
-			docker_opts+=(--device="${device}:${device}")
+			base_opts+=(--device="${device}:${device}")
 		fi
 	done
 }
@@ -55,9 +61,18 @@ add_x11_opts
 add_pulse_opts
 add_video_opts
 
-echo "Starting Zoom with options:"
-printf "%s\n" "${docker_opts[@]}"
+case "${verbose}" in
+	true|TRUE|yes|y|t|1)
+		echo "Starting Zoom (${image}) with options:"
+		printf "%s\n" "${base_opts[@]}"
+		printf "%s\n" "${opts}"
+		;;
+esac
 
-# shellcheck disable=SC2046
-${sudo} docker run -d --rm $(printf "%s " "${docker_opts[@]}") \
-	jakubstefanski/zoom:latest zoom "$@"
+# shellcheck disable=SC2046,SC2086
+${sudo} docker run \
+	$(printf "%s " "${base_opts[@]}") \
+	${opts} \
+	"${image}" \
+	"${cmd}" \
+	"$@"

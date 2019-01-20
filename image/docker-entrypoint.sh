@@ -7,21 +7,21 @@ if [ ! -f /.dockerenv ]; then
 	exit 1
 fi
 
-user_name=${USER_NAME:-zoom}
-user_uid=${USER_UID:-1000}
-user_gid=${USER_GID:-1000}
+username=${USERNAME:-zoom}
+uid=${UID:-1000}
+gid=${GID:-1000}
 
 create_user() {
-	if ! getent group "${user_name}" > /dev/null; then
-		groupadd --force --gid "${user_gid}" "${user_name}"
+	if ! getent group "${username}" > /dev/null; then
+		groupadd --force --gid "${gid}" "${username}"
 	fi
 
-	if ! getent passwd "${user_name}" > /dev/null; then
-		adduser --disabled-login --uid "${user_uid}" --gid "${user_gid}" \
-			--gecos "${user_name}" "${user_name}"
+	mkdir -p "/home/${username}"
+	if ! getent passwd "${username}" > /dev/null; then
+		useradd --uid "${uid}" --gid "${gid}" "${username}"
 	fi
 
-	chown "${user_name}:${user_name}" -R "/home/${user_name}"
+	chown "${username}:${username}" -R "/home/${username}"
 }
 
 grant_video_devices() {
@@ -33,25 +33,25 @@ grant_video_devices() {
 				video_group=custom_video
 				groupadd -g "${video_gid}" "${video_group}"
 			fi
-			usermod -a -G ${video_group} "${user_name}"
+			usermod -a -G ${video_group} "${username}"
 			break
 		fi
 	done
 }
 
 launch_zoom() {
-	cd "/home/${user_name}"
-	exec sudo -HEu "${user_name}" PULSE_SERVER=/run/pulse/native QT_GRAPHICSSYSTEM=native "$@"
+	cd "/home/${username}"
+	exec sudo -HEu "${username}" PULSE_SERVER=/run/pulse/native QT_GRAPHICSSYSTEM=native "$@"
 }
 
 create_user
 grant_video_devices
 
 case "$1" in
-  zoom)
-    launch_zoom "$@"
-    ;;
-  *)
-    exec "$@"
-    ;;
+	zoom)
+		launch_zoom "$@"
+		;;
+	*)
+		exec "$@"
+		;;
 esac
